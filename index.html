@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="so">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlifPay Wallet Demo</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+  body { font-family: 'Inter', sans-serif; margin:0; background:#e0e7ff; color:#1e293b; }
+  .container { max-width:480px; margin:30px auto; padding:20px; }
+
+  h1,h2 { margin:0; font-weight:600; color:#4f46e5; }
+
+  input { width:100%; padding:12px; margin:8px 0; border-radius:10px; border:1px solid #cbd5e1; box-sizing:border-box; font-size:14px; }
+
+  button { width:100%; padding:12px; margin:6px 0; border:none; border-radius:12px; font-weight:600; cursor:pointer; color:#fff; transition:.2s; }
+  button:hover { opacity:0.9; }
+
+  .hidden { display:none; }
+  .status { margin-top:6px; font-size:13px; color:#1e293b; }
+
+  .card { background:linear-gradient(135deg,#6366f1,#4f46e5); color:#fff; border-radius:16px; padding:20px; margin-bottom:20px; box-shadow:0 6px 20px rgba(0,0,50,0.1); }
+  .card p { margin:6px 0; font-weight:500; }
+  .address { font-family: monospace; background:rgba(255,255,255,0.2); padding:4px 6px; border-radius:6px; display:inline-block; word-break: break-all; }
+
+  .buttons-row { display:flex; gap:12px; margin-top:12px; }
+  .buttons-row button { flex:1; }
+  .send-btn { background:#2563eb; }
+  .receive-btn { background:#10b981; }
+  .deposit-btn { background:#f59e0b; }
+  .withdraw-btn { background:#ef4444; }
+
+  .transactions { background:#f3f4ff; border-radius:12px; padding:12px; max-height:200px; overflow-y:auto; color:#1e293b; }
+  .txItem { padding:8px; border-radius:8px; background:#fff; border:1px solid #dbeafe; margin-bottom:6px; font-size:14px; }
+  .wizard { background:#ffffff; border-radius:12px; padding:12px; margin-top:12px; }
+
+  a { color:#2563eb; text-decoration:none; }
+  a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>AlifPay Demo Wallet</h1>
+
+  <!-- Signup -->
+  <section id="signupSection">
+    <h2>Signup</h2>
+    <input id="nameInput" placeholder="Magacaaga">
+    <input id="contactInput" placeholder="Email ama Phone">
+    <input id="passwordInput" type="password" placeholder="Password">
+    <button id="signupBtn">Codso PIN / OTP</button>
+    <div class="status" id="signupStatus"></div>
+    <p>Haddii hore account loo sameeyay, <a href="#" id="gotoLogin">Login halkan</a></p>
+  </section>
+
+  <!-- Login -->
+  <section id="loginSection" class="hidden">
+    <h2>Login</h2>
+    <input id="loginContact" placeholder="Email ama Phone">
+    <input id="loginPassword" type="password" placeholder="Password">
+    <button id="loginBtn">Login</button>
+    <div class="status" id="loginStatus"></div>
+    <p>Haddii account la sameeyay la'aan, <a href="#" id="gotoSignup">Signup halkan</a></p>
+  </section>
+
+  <!-- PIN Verification -->
+  <section id="pinSection" class="hidden">
+    <h2>Geli PIN</h2>
+    <input id="pinInput" placeholder="PIN (123456)">
+    <button id="verifyPinBtn">Verify PIN</button>
+    <div class="status" id="pinStatus"></div>
+  </section>
+
+  <!-- Wallet Dashboard -->
+  <section id="walletSection" class="hidden">
+    <div class="card">
+      <h2>ALIFPAY WALLET</h2>
+      <p><b>Balance:</b> $<span id="meBal">1000</span></p>
+      <p><b>Address:</b> <span class="address" id="meAddr">0x83fd....2A</span></p>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="buttons-row">
+      <button class="send-btn" id="startSendBtn">Send Money</button>
+      <button class="receive-btn" id="receiveBtn">Receive</button>
+    </div>
+    <div class="buttons-row">
+      <button class="deposit-btn" id="depositBtn">Deposit USDT</button>
+      <button class="withdraw-btn" id="withdrawBtn">Withdraw</button>
+    </div>
+
+    <!-- Send Wizard -->
+    <div id="sendWizard" class="wizard hidden">
+      <input id="wizardToContact" placeholder="Recipient Contact">
+      <input id="wizardAmount" type="number" placeholder="Amount">
+      <button id="sendWizardBtn">Send</button>
+      <div class="status" id="sendStatus"></div>
+    </div>
+
+    <!-- Receive -->
+    <div id="receiveSection" class="wizard hidden">
+      <p><b>Your Wallet Address:</b></p>
+      <span class="address" id="receiveAddr"></span>
+      <button id="copyAddrBtn">Copy Address</button>
+      <div class="status" id="receiveStatus"></div>
+    </div>
+
+    <!-- Recent Transactions -->
+    <div class="transactions" id="blocksList">
+      <h2>Recent Transactions</h2>
+    </div>
+
+    <button id="logoutBtn" style="margin-top:12px;background:#4b5563;">Logout</button>
+  </section>
+</div>
+
+<script>
+/* ---------------- UTILS ---------------- */
+function uid(len=8){ return Math.random().toString(16).slice(2,2+len); }
+function nowTs(){ return new Date().toISOString(); }
+function generateAddress(){ return '0x'+Array.from({length:40},()=>Math.floor(Math.random()*16).toString(16)).join(''); }
+
+/* ---------------- STORAGE ---------------- */
+const DB={ get(k){return JSON.parse(localStorage.getItem(k)||'null')}, set(k,v){localStorage.setItem(k,JSON.stringify(v))} };
+if(!DB.get('alif_users')) DB.set('alif_users',{});
+if(!DB.get('alif_txs')) DB.set('alif_txs',[]);
+
+/* ---------------- ELEMENTS ---------------- */
+const signupSection=document.getElementById('signupSection');
+const loginSection=document.getElementById('loginSection');
+const pinSection=document.getElementById('pinSection');
+const walletSection=document.getElementById('walletSection');
+
+const nameInput=document.getElementById('nameInput');
+const contactInput=document.getElementById('contactInput');
+const passwordInput=document.getElementById('passwordInput');
+const signupBtn=document.getElementById('signupBtn');
+const signupStatus=document.getElementById('signupStatus');
+
+const loginContact=document.getElementById('loginContact');
+const loginPassword=document.getElementById('loginPassword');
+const loginBtn=document.getElementById('loginBtn');
+const loginStatus=document.getElementById('loginStatus');
+
+const gotoLogin=document.getElementById('gotoLogin');
+const gotoSignup=document.getElementById('gotoSignup');
+
+const pinInput=document.getElementById('pinInput');
+const verifyPinBtn=document.getElementById('verifyPinBtn');
+const pinStatus=document.getElementById('pinStatus');
+
+const meAddr=document.getElementById('meAddr');
+const meBal=document.getElementById('meBal');
+
+const startSendBtn = document.getElementById('startSendBtn');
+const receiveBtn = document.getElementById('receiveBtn');
+const sendWizard = document.getElementById('sendWizard');
+const wizardToContact = document.getElementById('wizardToContact');
+const wizardAmount = document.getElementById('wizardAmount');
+const sendWizardBtn = document.getElementById('sendWizardBtn');
+const sendStatus = document.getElementById('sendStatus');
+
+const receiveSection = document.getElementById('receiveSection');
+const receiveAddr = document.getElementById('receiveAddr');
+const copyAddrBtn = document.getElementById('copyAddrBtn');
+const receiveStatus = document.getElementById('receiveStatus');
+
+const depositBtn=document.getElementById('depositBtn');
+const withdrawBtn=document.getElementById('withdrawBtn');
+
+const blocksList=document.getElementById('blocksList');
+const logoutBtn=document.getElementById('logoutBtn');
+
+let session=null;
+let otpStore={};
+
+/* ---------------- NAV ---------------- */
+gotoLogin.onclick=e=>{e.preventDefault(); signupSection.classList.add('hidden'); loginSection.classList.remove('hidden');}
+gotoSignup.onclick=e=>{e.preventDefault(); loginSection.classList.add('hidden'); signupSection.classList.remove('hidden');}
+
+/* ---------------- SIGNUP ---------------- */
+signupBtn.onclick=()=>{
+  const name=nameInput.value.trim();
+  const contact=contactInput.value.trim();
+  const password=passwordInput.value.trim();
+  if(!name||!contact||!password){signupStatus.textContent='Geli dhammaan xogta'; return;}
+  const users=DB.get('alif_users');
+  if(!users[contact]) users[contact]={ name, password, address:generateAddress(), balance:1000, createdAt: nowTs() };
+  DB.set('alif_users', users);
+  otpStore[contact]='123456';
+  signupStatus.textContent='PIN / OTP waa la diray (demo: 123456)';
+  session={contact};
+  signupSection.classList.add('hidden');
+  pinSection.classList.remove('hidden');
+}
+
+/* ---------------- LOGIN ---------------- */
+loginBtn.onclick=()=>{
+  const contact=loginContact.value.trim();
+  const password=loginPassword.value.trim();
+  const users=DB.get('alif_users');
+  if(!contact||!password){loginStatus.textContent='Geli xogta'; return;}
+  if(!users[contact]||users[contact].password!==password){loginStatus.textContent='Contact ama Password khalad'; return;}
+  session={contact};
+  loginSection.classList.add('hidden');
+  walletSection.classList.remove('hidden');
+  const user=users[contact];
+  meAddr.textContent=user.address;
+  meBal.textContent=user.balance;
+  renderTransactions();
+}
+
+/* ---------------- PIN Verification ---------------- */
+verifyPinBtn.onclick=()=>{
+  const pin=pinInput.value.trim();
+  const contact=session?.contact;
+  if(!otpStore[contact]){pinStatus.textContent='PIN lama dirin'; return;}
+  if(pin!==otpStore[contact]){pinStatus.textContent='PIN khalad ah'; return;}
+  pinStatus.textContent='PIN sax ah. Welcome!';
+  pinSection.classList.add('hidden');
+  walletSection.classList.remove('hidden');
+  const user=DB.get('alif_users')[contact];
+  meAddr.textContent=user.address;
+  meBal.textContent=user.balance;
+  renderTransactions();
+}
+
+/* ---------------- SEND MONEY ---------------- */
+startSendBtn.onclick=()=>{ sendWizard.classList.toggle('hidden'); receiveSection.classList.add('hidden'); }
+
+sendWizardBtn.onclick=()=>{
+  sendStatus.textContent='';
+  const contact=session?.contact;
+  const users=DB.get('alif_users');
+  const sender=users[contact];
+  const recipientContact=wizardToContact.value.trim();
+  const amt=Number(wizardAmount.value);
+  if(!recipientContact||amt<=0){ sendStatus.textContent='Geli xogta saxda'; return; }
+  if(sender.balance<amt){ sendStatus.textContent='Balance ma filna'; return; }
+  if(!users[recipientContact]){
+    users[recipientContact]={ name:'Unknown', address:generateAddress(), balance:0, createdAt:nowTs() };
+  }
+  const recipient=users[recipientContact];
+  sender.balance-=amt;
+  recipient.balance+=amt;
+  DB.set('alif_users',users);
+
+  // add tx
+  const tx={ txHash:'0x'+uid(12), from:sender.address, to:recipient.address, amount:amt, ts:nowTs(), type:'Send'};
+  const txs=DB.get('alif_txs'); txs.push(tx); DB.set('alif_txs',txs);
+
+  meBal.textContent=sender.balance;
+  sendStatus.textContent='Transfer OK → '+tx.txHash;
+  wizardToContact.value=''; wizardAmount.value='';
+  renderTransactions();
+}
+
+/* ---------------- RECEIVE ---------------- */
+receiveBtn.onclick=()=>{
+  receiveSection.classList.toggle('hidden');
+  sendWizard.classList.add('hidden');
+  const user=DB.get('alif_users')[session.contact];
+  receiveAddr.textContent=user.address;
+}
+
+copyAddrBtn.onclick=()=>{
+  navigator.clipboard.writeText(receiveAddr.textContent)
+    .then(()=>{ receiveStatus.textContent="Address la copy gareeyay!"; })
+    .catch(()=>{ receiveStatus.textContent="Copy failed"; });
+}
+
+/* ---------------- DEPOSIT / WITHDRAW ---------------- */
+depositBtn.onclick=()=>{
+  const amt=prompt("Deposit USDT amount:");
+  const val=Number(amt);
+  if(val<=0){ alert("Amount sax ah geli"); return; }
+  const users=DB.get('alif_users');
+  users[session.contact].balance+=val;
+  DB.set('alif_users',users);
+  const tx={ txHash:'0x'+uid(12), from:'External', to:users[session.contact].address, amount:val, ts:nowTs(), type:'Deposit'};
+  const txs=DB.get('alif_txs'); txs.push(tx); DB.set('alif_txs',txs);
+  meBal.textContent=users[session.contact].balance;
+  renderTransactions();
+}
+
+withdrawBtn.onclick=()=>{
+  const amt=prompt("Withdraw USDT amount:");
+  const val=Number(amt);
+  const users=DB.get('alif_users');
+  if(val<=0||val>users[session.contact].balance){ alert("Amount ma filna"); return; }
+  users[session.contact].balance-=val;
+  DB.set('alif_users',users);
+  const tx={ txHash:'0x'+uid(12), from:users[session.contact].address, to:'External', amount:val, ts:nowTs(), type:'Withdraw'};
+  const txs=DB.get('alif_txs'); txs.push(tx); DB.set('alif_txs',txs);
+  meBal.textContent=users[session.contact].balance;
+  renderTransactions();
+}
+
+/* ---------------- TRANSACTIONS ---------------- */
+function renderTransactions(){
+  const txs=DB.get('alif_txs')||[];
+  blocksList.innerHTML='<h2>Recent Transactions</h2>';
+  for(const t of txs.slice().reverse()){
+    const div=document.createElement('div'); div.className='txItem';
+    div.innerHTML=`• ${t.type} ${t.amount} ALIF ${t.type==='Send'? '→ ' + t.to : ''} <br> <small>${t.ts}</small>`;
+    blocksList.appendChild(div);
+  }
+}
+
+/* ---------------- LOGOUT ---------------- */
+logoutBtn.onclick=()=>{
+  session=null;
+  walletSection.classList.add('hidden');
+  loginSection.classList.remove('hidden');
+}
+</script>
+</body>
+  </html>
