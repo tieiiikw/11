@@ -247,8 +247,8 @@ sendWizardBtn.onclick=()=>{
 
   // add tx
   const tx={ txHash:'0x'+uid(12), from:sender.address, to:recipient.address, amount:amt, ts:nowTs(), type:'Send'};
-  const txs=DB.get('alif_txs'); txs.push(tx); DB.set('alif_txs',txs);
-
+const txs=DB.get('alif_txs'); txs.push(tx); DB.set('alif_txs',txs);
+addBlock(tx); // <-- add this
   meBal.textContent=sender.balance;
   sendStatus.textContent='Transfer OK → '+tx.txHash;
   wizardToContact.value=''; wizardAmount.value='';
@@ -278,7 +278,8 @@ depositBtn.onclick=()=>{
   users[session.contact].balance+=val;
   DB.set('alif_users',users);
   const tx={ txHash:'0x'+uid(12), from:'External', to:users[session.contact].address, amount:val, ts:nowTs(), type:'Deposit'};
-  const txs=DB.get('alif_txs'); txs.push(tx); DB.set('alif_txs',txs);
+const txs=DB.get('alif_txs'); txs.push(tx); DB.set('alif_txs',txs);
+addBlock(tx); // <-- add this
   meBal.textContent=users[session.contact].balance;
   renderTransactions();
 }
@@ -291,7 +292,8 @@ withdrawBtn.onclick=()=>{
   users[session.contact].balance-=val;
   DB.set('alif_users',users);
   const tx={ txHash:'0x'+uid(12), from:users[session.contact].address, to:'External', amount:val, ts:nowTs(), type:'Withdraw'};
-  const txs=DB.get('alif_txs'); txs.push(tx); DB.set('alif_txs',txs);
+const txs=DB.get('alif_txs'); txs.push(tx); DB.set('alif_txs',txs);
+addBlock(tx); // <-- add this
   meBal.textContent=users[session.contact].balance;
   renderTransactions();
 }
@@ -306,6 +308,41 @@ function renderTransactions(){
     blocksList.appendChild(div);
   }
 }
+  /* ---------------- BLOCKCHAIN ---------------- */
+if(!DB.get('alif_blocks')) DB.set('alif_blocks',[]);
+
+function addBlock(tx){
+  const blocks = DB.get('alif_blocks');
+  const prev = blocks.length ? blocks[blocks.length-1].hash : '0x0';
+  const block = {
+    index: blocks.length,
+    ts: nowTs(),
+    prevHash: prev,
+    hash: '0x' + uid(16),
+    txs: [tx]
+  };
+  blocks.push(block);
+  DB.set('alif_blocks', blocks);
+  renderBlocks();
+}
+
+function renderBlocks(){
+  const blocks = DB.get('alif_blocks') || [];
+  const container = document.getElementById('blocksList');
+  container.innerHTML = '<h2>Recent Transactions / Blocks</h2>';
+  for(const b of blocks.slice().reverse()){
+    const div = document.createElement('div');
+    div.className='txItem';
+    div.style.border='1px solid #dbeafe';
+    div.style.marginBottom='8px';
+    div.style.padding='8px';
+    div.innerHTML=`<b>Block #${b.index}</b><br>Hash: ${b.hash}<br>Prev: ${b.prevHash}<br>Time: ${b.ts}<br>`;
+    for(const t of b.txs){
+      div.innerHTML += `&nbsp;&nbsp;• ${t.type} ${t.amount} ALIF ${t.type==='Send'? '→ ' + t.to : ''}<br>`;
+    }
+    container.appendChild(div);
+  }
+  }
 
 /* ---------------- LOGOUT ---------------- */
 logoutBtn.onclick=()=>{
